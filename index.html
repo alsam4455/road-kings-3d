@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>ROAD KINGS 3D</title>
+<style>
+*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#101820;font-family:Arial,sans-serif;touch-action:none}
+#view{display:block;width:100%;height:100%}
+#hud{position:fixed;inset:12px 12px auto;display:flex;justify-content:space-between;gap:8px;pointer-events:none;color:#fff}
+.stat{background:#101820d9;border:1px solid #ffffff55;border-radius:11px;padding:9px 13px;font-weight:800;font-size:14px;text-shadow:0 1px 2px #000}
+#menu{position:fixed;inset:0;display:grid;place-items:center;background:#07111b9c;color:#fff}
+.panel{width:min(90vw,440px);padding:25px;background:#0b1724ed;border:1px solid #ffffff55;border-radius:18px;text-align:center;box-shadow:0 12px 45px #0009}
+h1{font-size:clamp(30px,7vw,48px);letter-spacing:3px;margin:0 0 8px}p{color:#d7e2eb;line-height:1.5}
+button{border:0;border-radius:12px;background:#f4b51d;color:#151515;font-size:17px;font-weight:900;padding:13px 28px}
+#controls{position:fixed;bottom:18px;left:0;right:0;display:flex;justify-content:space-between;padding:0 22px;pointer-events:none}
+.cluster{display:flex;gap:12px}.ctl{pointer-events:auto;width:65px;height:65px;border:2px solid #ffffffa8;border-radius:50%;background:#101820aa;color:#fff;font-size:27px;font-weight:bold;display:grid;place-items:center;user-select:none}
+#gas{width:76px;height:76px;background:#b97612dd}
+#status{position:fixed;left:50%;top:76px;transform:translateX(-50%);color:white;background:#101820bb;padding:8px 12px;border-radius:9px;font-size:12px;text-align:center;max-width:90vw}
+#help{position:fixed;bottom:6px;left:50%;transform:translateX(-50%);color:#fff;text-shadow:0 2px 4px #000;font-size:11px;white-space:nowrap}
+@media(orientation:portrait){#help{bottom:102px}#status{top:66px}}
+</style>
+</head>
+<body>
+<canvas id="view"></canvas>
+<div id="hud"><div class="stat" id="lv">LEVEL 1</div><div class="stat" id="meters">0 m</div><div class="stat" id="spd">0 km/h</div></div>
+<div id="status">Loading 3D car model… Please keep internet on.</div>
+<div id="menu"><div class="panel"><h1>ROAD KINGS 3D</h1><p>Real 3D racing prototype<br>One long race road · rival cars · spectator stands</p><p id="loadnote">Loading the Ferrari 3D model…</p><button id="play" disabled>LOADING…</button></div></div>
+<div id="controls"><div class="cluster"><div class="ctl" id="left">◀</div><div class="ctl" id="right">▶</div></div><div class="ctl" id="gas">▲</div></div>
+<div id="help">PC: ← → steer, ↑ accelerate &nbsp; | &nbsp; Android: touch buttons</div>
+<script type="module">
+import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
+import {GLTFLoader} from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/loaders/GLTFLoader.js';
+const canvas=document.querySelector('#view');
+const renderer=new THREE.WebGLRenderer({canvas,antialias:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio,1.8));
+renderer.setSize(innerWidth,innerHeight);
+renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+renderer.outputColorSpace=THREE.SRGBColorSpace;
+renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.15;
+const scene=new THREE.Scene();scene.background=new THREE.Color(0x9fc8df);scene.fog=new THREE.Fog(0x9fc8df,65,230);
+const camera=new THREE.PerspectiveCamera(62,innerWidth/innerHeight,.1,500);
+camera.position.set(0,5.2,11.5);
+scene.add(new THREE.HemisphereLight(0xe8f5ff,0x526044,2.0));
+const sun=new THREE.DirectionalLight(0xfff0d6,3.0);sun.position.set(-15,28,10);sun.castShadow=true;sun.shadow.mapSize.set(2048,2048);sun.shadow.camera.left=-35;sun.shadow.camera.right=35;sun.shadow.camera.top=45;sun.shadow.camera.bottom=-45;scene.add(sun);
+const mat=(color,rough=.8,metal=0)=>new THREE.MeshStandardMaterial({color,roughness:rough,metalness:metal});
+const asphalt=mat(0x30343a,.96),grass=mat(0x586b4b),white=mat(0xf1f1e8),steel=mat(0x626a70,.55,.6),seatMat=[mat(0xb32626),mat(0x263e62),mat(0x9a9a91),mat(0xd0a02b)];
+function box(w,h,d,m,x,y,z,parent=scene){const o=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),m);o.position.set(x,y,z);o.castShadow=true;o.receiveShadow=true;parent.add(o);return o}
+box(300,.2,500,grass,0,-.25,-150);
+box(18,.18,500,asphalt,0,-.08,-150);
+for(let x of [-9.15,9.15])box(.18,.04,500,white,x,.04,-150);
+for(let x of [-3,3])for(let z=10;z>-400;z-=12)box(.12,.025,5,white,x,.035,z-5);
+// barriers and spectator terraces, only trackside structures
+for(const side of [-1,1]){
+ box(1,.55,500,mat(0xaaa69a),side*10,-.02,-150);
+ box(.35,1.1,500,steel,side*11,.55,-150);
+ for(let row=0;row<4;row++){
+  const z0=-8-row*2.5;
+  const tier=box(5,.38,420,mat(row%2?0x444c54:0x59616a),side*14,1.05+row*.58,-205);
+  tier.position.z=-205;
+  // repeated individual seats along the visible grandstand length
+  for(let z=z0;z>-390;z-=9){
+   const seat=box(.72,.22,.72,seatMat[(Math.floor(-z/9)+row)%4],side*(12.5+row*.85),1.65+row*.58,z);
+   box(.08,.45,.08,steel,side*(12.5+row*.85)-.25,1.35+row*.58,z);
+   // seated spectator proxy: torso, head, legs; repeated as 3D meshes
+   const skin=mat([0xb9825e,0xd4a17d,0x80553d,0xe0b894][(Math.floor(-z/9)+row)%4]);
+   const shirt=seatMat[(Math.floor(-z/9)+row+1)%4];
+   const px=side*(12.5+row*.85), py=2.0+row*.58;
+   const body=new THREE.Mesh(new THREE.CapsuleGeometry(.22,.42,3,6),shirt);body.position.set(px,py,z);body.rotation.x=.15;scene.add(body);
+   const head=new THREE.Mesh(new THREE.SphereGeometry(.16,10,8),skin);head.position.set(px,py+.38,z-.03);scene.add(head);
+   const leg1=box(.14,.42,.14,mat(0x20232a),px-.13,py-.28,z+.15);
+   const leg2=box(.14,.42,.14,mat(0x20232a),px+.13,py-.28,z+.15);
+  }
+ }
+}
+// distant empty horizon, no houses or city
+const horizon=box(400,.2,30,mat(0x657b58),0,-.18,-410);
+let player=null,carTemplate=null,opponents=[],ready=false,playing=false,level=1,distance=0,speed=0,lane=0,steer=0,finish=900,last=performance.now(),spawnTimer=0;
+const loader=new GLTFLoader();
+loader.load('https://threejs.org/examples/models/gltf/ferrari.glb',g=>{
+ carTemplate=g.scene;
+ const b=new THREE.Box3().setFromObject(carTemplate),size=b.getSize(new THREE.Vector3());
+ const max=Math.max(size.x,size.y,size.z);carTemplate.scale.setScalar(4.2/max);
+ const bb=new THREE.Box3().setFromObject(carTemplate);const center=bb.getCenter(new THREE.Vector3());
+ carTemplate.position.sub(center);carTemplate.position.y-=bb.min.y;
+ player=carTemplate.clone(true);player.position.set(0,0,5);player.rotation.y=Math.PI;scene.add(player);
+ ready=true;document.querySelector('#play').disabled=false;document.querySelector('#play').textContent='START RACE';document.querySelector('#loadnote').textContent='3D Ferrari model loaded. Start your race.';document.querySelector('#status').textContent='3D car loaded';
+},p=>{if(p.total)document.querySelector('#loadnote').textContent='Loading car model '+Math.round(p.loaded/p.total*100)+'%';},e=>{document.querySelector('#loadnote').textContent='3D car model could not load. Check internet and refresh.';document.querySelector('#status').textContent='Car model load failed';});
+function addOpponent(z,laneX){
+ if(!carTemplate)return;
+ const c=carTemplate.clone(true);const colors=[0xededed,0x1d4e78,0x17191d,0xc7a42b,0x8f2525];
+ c.traverse(o=>{if(o.isMesh&&o.material){o.material=o.material.clone();if(o.material.color)o.material.color.setHex(colors[Math.floor(Math.random()*colors.length)]);}});
+ c.scale.multiplyScalar(.92);c.position.set(laneX,0,z);c.rotation.y=Math.PI;scene.add(c);opponents.push({mesh:c,z,x:laneX});
+}
+function reset(){distance=0;speed=70;lane=0;spawnTimer=0;opponents.forEach(o=>scene.remove(o.mesh));opponents=[];for(let i=0;i<4;i++)addOpponent(-45-i*38,[-5,0,5][Math.floor(Math.random()*3)]);playing=true;document.querySelector('#menu').style.display='none';}
+document.querySelector('#play').onclick=()=>{if(ready)reset()};
+function bind(id,v){const e=document.getElementById(id);e.addEventListener('pointerdown',ev=>{ev.preventDefault();steer=v});['pointerup','pointercancel','pointerleave'].forEach(n=>e.addEventListener(n,()=>steer=0));}
+bind('left',-1);bind('right',1);
+document.getElementById('gas').addEventListener('pointerdown',()=>{if(playing)speed=Math.min(240,speed+18)});
+addEventListener('keydown',e=>{if(e.key==='ArrowLeft'||e.key==='a')steer=-1;if(e.key==='ArrowRight'||e.key==='d')steer=1;if(e.key==='ArrowUp'||e.key==='w')speed=Math.min(240,speed+3)});
+addEventListener('keyup',e=>{if(['ArrowLeft','ArrowRight','a','d'].includes(e.key))steer=0});
+function animate(now){
+ requestAnimationFrame(animate);const dt=Math.min((now-last)/1000,.04);last=now;
+ if(playing){
+  speed=Math.min(220,speed+dt*3);distance+=speed*dt*.5;lane+=steer*dt*8;lane=THREE.MathUtils.clamp(lane,-6.5,6.5);
+  player.position.x=THREE.MathUtils.damp(player.position.x,lane,.13,dt);player.rotation.z=THREE.MathUtils.damp(player.rotation.z,-steer*.09,.12,dt);
+  spawnTimer+=dt;if(spawnTimer>1.8){spawnTimer=0;addOpponent(-220,[-5,0,5][Math.floor(Math.random()*3)])}
+  opponents.forEach(o=>{o.z+=speed*dt*.8;o.mesh.position.z=o.z});
+  opponents=opponents.filter(o=>{if(o.z>18){scene.remove(o.mesh);return false}return true});
+  for(const o of opponents){if(Math.abs(o.z-5)<5&&Math.abs(o.x-lane)<2.5)speed=Math.max(45,speed-85*dt)}
+  if(distance>=finish){playing=false;level++;finish+=level*500;document.querySelector('#menu').style.display='grid';document.querySelector('#menu h1').textContent='LEVEL COMPLETE';document.querySelector('#loadnote').textContent='Level '+level+' unlocked. Race distance increases.';document.querySelector('#play').textContent='NEXT LEVEL'}
+  document.querySelector('#lv').textContent='LEVEL '+level;document.querySelector('#meters').textContent=Math.floor(distance)+' m';document.querySelector('#spd').textContent=Math.floor(speed)+' km/h';
+ }
+ // moving road markings simulate forward travel
+ camera.position.x=THREE.MathUtils.damp(camera.position.x,player?player.position.x*.32:0,.8,dt);
+ camera.lookAt(player?player.position.x*.2:0,1,-13);
+ renderer.render(scene,camera);
+}
+requestAnimationFrame(animate);
+addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);renderer.setPixelRatio(Math.min(devicePixelRatio,1.8));});
+</script>
+</body></html>
