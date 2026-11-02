@@ -30,7 +30,6 @@ button{border:0;border-radius:12px;background:#f4b51d;color:#151515;font-size:17
 <div id="help">PC: ← → steer, ↑ accelerate &nbsp; | &nbsp; Android: touch buttons</div>
 <script type="module">
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
-import {GLTFLoader} from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/loaders/GLTFLoader.js';
 const canvas=document.querySelector('#view');
 const renderer=new THREE.WebGLRenderer({canvas,antialias:true});
 renderer.setPixelRatio(Math.min(devicePixelRatio,1.8));
@@ -76,21 +75,41 @@ for(const side of [-1,1]){
 // distant empty horizon, no houses or city
 const horizon=box(400,.2,30,mat(0x657b58),0,-.18,-410);
 let player=null,carTemplate=null,opponents=[],ready=false,playing=false,level=1,distance=0,speed=0,lane=0,steer=0,finish=900,last=performance.now(),spawnTimer=0;
-const loader=new GLTFLoader();
-loader.load('https://threejs.org/examples/models/gltf/ferrari.glb',g=>{
- carTemplate=g.scene;
- const b=new THREE.Box3().setFromObject(carTemplate),size=b.getSize(new THREE.Vector3());
- const max=Math.max(size.x,size.y,size.z);carTemplate.scale.setScalar(4.2/max);
- const bb=new THREE.Box3().setFromObject(carTemplate);const center=bb.getCenter(new THREE.Vector3());
- carTemplate.position.sub(center);carTemplate.position.y-=bb.min.y;
- player=carTemplate.clone(true);player.position.set(0,0,5);player.rotation.y=Math.PI;scene.add(player);
- ready=true;document.querySelector('#play').disabled=false;document.querySelector('#play').textContent='START RACE';document.querySelector('#loadnote').textContent='3D Ferrari model loaded. Start your race.';document.querySelector('#status').textContent='3D car loaded';
-},p=>{if(p.total)document.querySelector('#loadnote').textContent='Loading car model '+Math.round(p.loaded/p.total*100)+'%';},e=>{document.querySelector('#loadnote').textContent='3D car model could not load. Check internet and refresh.';document.querySelector('#status').textContent='Car model load failed';});
+function makeSportsCar(color=0xc51e2b){
+ const root=new THREE.Group();
+ const paint=mat(color,.28,.72),glass=mat(0x142532,.18,.45),rubber=mat(0x101114,.92),rim=mat(0xbfc7ce,.22,.85),lamp=mat(0xfff2cf,.2,.35),tail=mat(0xe32626,.25,.25);
+ function part(geo,m,x,y,z,rx=0,ry=0,rz=0){const o=new THREE.Mesh(geo,m);o.position.set(x,y,z);o.rotation.set(rx,ry,rz);o.castShadow=true;o.receiveShadow=true;root.add(o);return o;}
+ // low sports-car body, bonnet, cabin and rear deck
+ part(new THREE.BoxGeometry(2.05,.48,4.25),paint,0,.72,0);
+ part(new THREE.BoxGeometry(1.9,.34,1.18),paint,0,.96,-1.38);
+ part(new THREE.BoxGeometry(1.88,.32,.95),paint,0,.94,1.48);
+ part(new THREE.BoxGeometry(1.48,.64,1.75),glass,0,1.28,.02);
+ part(new THREE.BoxGeometry(1.56,.10,1.88),paint,0,1.62,.02);
+ // bumpers and lights
+ part(new THREE.BoxGeometry(1.92,.18,.18),paint,0,.55,-2.12);
+ part(new THREE.BoxGeometry(.42,.12,.06),lamp,-.65,.85,-2.145);
+ part(new THREE.BoxGeometry(.42,.12,.06),lamp,.65,.85,-2.145);
+ part(new THREE.BoxGeometry(.38,.12,.06),tail,-.68,.82,2.13);
+ part(new THREE.BoxGeometry(.38,.12,.06),tail,.68,.82,2.13);
+ // wheels with metallic hubs
+ for(const x of [-1.02,1.02])for(const z of [-1.35,1.35]){
+  part(new THREE.CylinderGeometry(.43,.43,.24,20),rubber,x,.48,z,0,0,Math.PI/2);
+  part(new THREE.CylinderGeometry(.22,.22,.255,16),rim,x,.48,z,0,0,Math.PI/2);
+ }
+ // mirrors and rear wing
+ part(new THREE.BoxGeometry(.22,.12,.32),paint,-1.05,1.18,-.48);
+ part(new THREE.BoxGeometry(.22,.12,.32),paint,1.05,1.18,-.48);
+ part(new THREE.BoxGeometry(1.65,.10,.34),paint,0,1.55,1.92);
+ return root;
+}
+carTemplate=makeSportsCar();
+player=carTemplate.clone(true);player.position.set(0,0,5);player.rotation.y=0;scene.add(player);
+ready=true;document.querySelector('#play').disabled=false;document.querySelector('#play').textContent='START RACE';document.querySelector('#loadnote').textContent='3D sports car ready. Start your race.';document.querySelector('#status').textContent='Ready to race';
 function addOpponent(z,laneX){
  if(!carTemplate)return;
- const c=carTemplate.clone(true);const colors=[0xededed,0x1d4e78,0x17191d,0xc7a42b,0x8f2525];
- c.traverse(o=>{if(o.isMesh&&o.material){o.material=o.material.clone();if(o.material.color)o.material.color.setHex(colors[Math.floor(Math.random()*colors.length)]);}});
- c.scale.multiplyScalar(.92);c.position.set(laneX,0,z);c.rotation.y=Math.PI;scene.add(c);opponents.push({mesh:c,z,x:laneX});
+ const colors=[0xededed,0x1d4e78,0x17191d,0xc7a42b,0x8f2525];
+ const c=makeSportsCar(colors[Math.floor(Math.random()*colors.length)]);
+ c.scale.multiplyScalar(.92);c.position.set(laneX,0,z);c.rotation.y=0;scene.add(c);opponents.push({mesh:c,z,x:laneX});
 }
 function reset(){distance=0;speed=70;lane=0;spawnTimer=0;opponents.forEach(o=>scene.remove(o.mesh));opponents=[];for(let i=0;i<4;i++)addOpponent(-45-i*38,[-5,0,5][Math.floor(Math.random()*3)]);playing=true;document.querySelector('#menu').style.display='none';}
 document.querySelector('#play').onclick=()=>{if(ready)reset()};
@@ -115,8 +134,3 @@ function animate(now){
  camera.position.x=THREE.MathUtils.damp(camera.position.x,player?player.position.x*.32:0,.8,dt);
  camera.lookAt(player?player.position.x*.2:0,1,-13);
  renderer.render(scene,camera);
-}
-requestAnimationFrame(animate);
-addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);renderer.setPixelRatio(Math.min(devicePixelRatio,1.8));});
-</script>
-</body></html>
